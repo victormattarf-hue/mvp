@@ -1,51 +1,118 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Leitor de QR Code</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            background: #f2f2f2;
-        }
-        video {
-            width: 100%;
-            max-height: 60vh;
-            border: 2px solid #333;
-            border-radius: 8px;
-            background: black;
-        }
-        #resultado {
-            margin-top: 20px;
-            padding: 10px;
-            background: white;
-            border-radius: 6px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leitor QR Code</title>
+
+<style>
+    body {
+        font-family: Arial;
+        margin: 0;
+        padding: 20px;
+        text-align: center;
+        background: #f4f4f4;
+    }
+    video {
+        width: 100%;
+        max-width: 480px;
+        background: black;
+        border-radius: 12px;
+        border: 3px solid #333;
+    }
+    #resultado {
+        margin-top: 20px;
+        font-size: 18px;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+    }
+    #btnCam {
+        margin-top: 20px;
+        padding: 12px 18px;
+        background: #0077ff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+</style>
 </head>
 <body>
-    <h1>Leitor de QR Code</h1>
 
-    <video id="preview"></video>
+<h1>Leitor de QR Code</h1>
 
-    <div id="resultado">Aponte a câmera para um QR...</div>
+<video id="video" autoplay></video>
 
-    <script src="qr-scanner.min.js"></script>
-    <script>
-        const video = document.getElementById('preview');
-        const resultado = document.getElementById('resultado');
+<div id="resultado">Aponte a câmera para um QR...</div>
 
-        // Arquivo worker do scanner
-        QrScanner.WORKER_PATH = 'qr-scanner-worker.min.js';
+<button id="btnCam">Trocar câmera</button>
 
-        const scanner = new QrScanner(video, (conteudo) => {
-            resultado.innerHTML = `<strong>QR detectado:</strong><br>${conteudo}`;
-            console.log("QR lido:", conteudo);
+<script>
+let usandoFrontal = false;
+let streamAtual = null;
+let detector = null;
+
+async function iniciarCamera() {
+    if (streamAtual) {
+        streamAtual.getTracks().forEach(t => t.stop());
+    }
+
+    try {
+        streamAtual = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: usandoFrontal ? "user" : "environment" }
         });
 
-        scanner.start();
-    </script>
+        const video = document.getElementById("video");
+        video.srcObject = streamAtual;
+
+        if (!("BarcodeDetector" in window)) {
+            document.getElementById("resultado").innerText = "Seu navegador não suporta leitura de QR Code nativo.";
+            return;
+        }
+
+        detector = new BarcodeDetector({ formats: ["qr_code"] });
+        scanLoop();
+
+    } catch (erro) {
+        document.getElementById("resultado").innerText = "Erro ao acessar câmera.";
+    }
+}
+
+async function scanLoop() {
+    if (!streamAtual) return;
+
+    try {
+        const video = document.getElementById("video");
+        const resultados = await detector.detect(video);
+
+        if (resultados.length > 0) {
+            const qr = resultados[0].rawValue;
+            document.getElementById("resultado").innerHTML = "<strong>QR detectado:</strong><br>" + qr;
+
+            if ("vibrate" in navigator) navigator.vibrate(200);
+
+            if (qr.startsWith("http")) {
+                window.location.href = qr;
+                return;
+            }
+        }
+
+    } catch (e) {
+        console.log(e);
+    }
+
+    requestAnimationFrame(scanLoop);
+}
+
+document.getElementById("btnCam").onclick = () => {
+    usandoFrontal = !usandoFrontal;
+    iniciarCamera();
+};
+
+iniciarCamera();
+</script>
+
 </body>
 </html>
